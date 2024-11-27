@@ -1,5 +1,4 @@
 #include "QtWindow.h"
-#include <assert.h>
 
 QtWindow::QtWindow(QWidget *parent): 
 
@@ -14,7 +13,16 @@ QtWindow::QtWindow(QWidget *parent):
 	handle = (HWND)winId();
 	CreateGLContext();
 	wglMakeCurrent(dc, rc);
-	assert(glewInit() == GLEW_OK);
+	if (glewInit() != GLEW_OK) {
+		throw "GL initialization failed";
+	}
+
+	dcRatio = static_cast<float>(devicePixelRatio());
+	w = width();
+	h = height();
+	glViewport(0, 0, static_cast<GLint>(w * dcRatio), static_cast<GLint>(h * 2));
+
+	InitializeGL();
 
 	GLUpdate();
 }
@@ -56,6 +64,17 @@ void QtWindow::Renderer() {
 	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+	glUseProgram(program);
+
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, texture);
+	glUniform1i(smp, 0);
+
+	glBindVertexArray(vao);
+	//glDrawArrays(GL_TRIANGLES, 0, 3);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
+	glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, NULL);
+
 	SwapBuffers(dc);
 }
 
@@ -67,10 +86,57 @@ bool QtWindow::event(QEvent* event) {
 }
 
 void QtWindow::resizeEvent(QResizeEvent* event) {
-	glViewport(0, 0, event->size().width(), event->size().height());
+	w = event->size().width();
+	h = event->size().height();
+	glViewport(0, 0, static_cast<GLint>(w * dcRatio), static_cast<GLint>(h * 2));
 	GLUpdate();
 }
 
 void QtWindow::GLUpdate() {
 	QApplication::postEvent(this, new QtEvent(QtEvent::GLRenderer));
+}
+
+void QtWindow::InitializeGL() {
+	program = CreateGPUProgram("assets/vertexShader.glsl", "assets/fragmentShader.glsl");
+
+	GLint posLoc = glGetAttribLocation(program, "pos");
+	GLint colLoc = glGetAttribLocation(program, "col");
+	GLint texCoordLoc = glGetAttribLocation(program, "texCoord");
+
+	smp = glGetUniformLocation(program, "uTexture");
+
+	glGenVertexArrays(1, &vao);
+	glBindVertexArray(vao);
+
+	CreateGLBuffer(&vbo, GL_ARRAY_BUFFER, GL_STATIC_DRAW, sizeof(vertices), vertices);
+
+	glBindBuffer(GL_ARRAY_BUFFER, vbo);
+	glEnableVertexAttribArray(posLoc);
+	glVertexAttribPointer(
+		posLoc,
+		3,
+		GL_FLOAT,
+		GL_FALSE,
+		8 * sizeof(GLfloat), // stride
+		(void*)(0) // offset
+	);
+	glEnableVertexAttribArray(colLoc);
+	glVertexAttribPointer(colLoc, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(GLfloat), (void*)(3 * sizeof(GLfloat)));
+	glEnableVertexAttribArray(texCoordLoc);
+	glVertexAttribPointer(texCoordLoc, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(GLfloat), (void*)(6 * sizeof(GLfloat)));
+
+	glBindBuffer(GL_ARRAY_BUFFER, NULL); // vbo
+	glBindVertexArray(NULL); // vao
+
+	CreateGLBuffer(&ebo, GL_ELEMENT_ARRAY_BUFFER, GL_STATIC_DRAW, sizeof(indices), indices);
+
+	LoadTextureImage(&texture, L"assets/resources/img/texture.png", GL_TEXTURE_2D, 0, GL_RGBA, GL_BGRA);
+
+	if (glGetError()) {
+		throw;
+	}
+
+	//direction: +z: front; -z: back.
+	glPolygonMode(GL_FRONT, GL_FILL);
+	glPolygonMode(GL_BACK, GL_LINE);
 }
