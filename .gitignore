@@ -1,2 +1,5 @@
 .vs/
 20241121QtWindow/
+bin/*
+!bin/assets/
+!bin/assets/**
