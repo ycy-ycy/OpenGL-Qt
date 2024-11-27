@@ -17,7 +17,7 @@ QtWindow::QtWindow(QWidget *parent):
 		throw "GL initialization failed";
 	}
 
-	dcRatio = static_cast<float>(devicePixelRatio());
+	dcRatio = static_cast<GLfloat>(devicePixelRatio());
 	w = width();
 	h = height();
 	glViewport(0, 0, static_cast<GLint>(w * dcRatio), static_cast<GLint>(h * 2));
@@ -70,6 +70,21 @@ void QtWindow::Renderer() {
 	glBindTexture(GL_TEXTURE_2D, texture);
 	glUniform1i(smp, 0);
 
+	QMatrix4x4 modelMat;
+	QMatrix4x4 viewMat;
+	QMatrix4x4 projMat;
+
+	modelMat.translate(0.0f, 0.0f, -1.5f);
+
+	QVector3D eyePoint(0.0f, 0.0f, 0.0f);
+	viewMat.lookAt(eyePoint, eyePoint + QVector3D(0.0f, 0.0f, -1.0f), QVector3D(0.0f, 1.0f, 0.0f));
+
+	projMat.perspective(45.0f, static_cast<GLfloat>(w) / static_cast<GLfloat>(h), 0.1f, 100.0f);
+
+	glUniformMatrix4fv(modelLoc, 1, GL_FALSE, modelMat.data());
+	glUniformMatrix4fv(viewLoc, 1, GL_FALSE, viewMat.data());
+	glUniformMatrix4fv(projLoc, 1, GL_FALSE, projMat.data());
+
 	glBindVertexArray(vao);
 	//glDrawArrays(GL_TRIANGLES, 0, 3);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
@@ -99,9 +114,12 @@ void QtWindow::GLUpdate() {
 void QtWindow::InitializeGL() {
 	program = CreateGPUProgram("assets/vertexShader.glsl", "assets/fragmentShader.glsl");
 
-	GLint posLoc = glGetAttribLocation(program, "pos");
-	GLint colLoc = glGetAttribLocation(program, "col");
-	GLint texCoordLoc = glGetAttribLocation(program, "texCoord");
+	posLoc = glGetAttribLocation(program, "pos");
+	colLoc = glGetAttribLocation(program, "col");
+	texCoordLoc = glGetAttribLocation(program, "texCoord");
+	modelLoc = glGetUniformLocation(program, "modelMat");
+	viewLoc = glGetUniformLocation(program, "viewMat");
+	projLoc = glGetUniformLocation(program, "projMat");
 
 	smp = glGetUniformLocation(program, "uTexture");
 
